@@ -4,7 +4,7 @@ Bot Discord Python qui repond quand on le mentionne dans un salon. A chaque ment
 
 Le projet contient maintenant deux bots independants:
 
-- `bot.py`: le bot de conversation actuel, avec son style venant de `lipa_style_system_prompt.txt`.
+- `babouin_bot.py`: le bot de conversation actuel, avec son style venant de `babouin_system_prompt.txt`.
 - `summary_bot.py`: un deuxieme bot qui resume la conversation, les reponses et les points de vue des participants.
 
 ## Installation
@@ -37,7 +37,7 @@ Le projet contient maintenant deux bots independants:
    OLLAMA_TOP_K=80
    OLLAMA_REPEAT_PENALTY=1.25
    CONTEXT_MESSAGE_LIMIT=50
-   STYLE_PROMPT_FILE=lipa_style_system_prompt.txt
+   STYLE_PROMPT_FILE=babouin_system_prompt.txt
    LOG_LEVEL=INFO
 
    # Deuxieme bot de resume
@@ -61,7 +61,7 @@ Le projet contient maintenant deux bots independants:
 6. Lance le premier bot:
 
    ```powershell
-   python bot.py
+   python babouin_bot.py
    ```
 
 7. Lance le deuxieme bot dans un autre terminal:
@@ -72,7 +72,7 @@ Le projet contient maintenant deux bots independants:
 
 ## Ollama
 
-Le bot utilise Ollama par defaut. Avant de lancer `python bot.py`, verifie qu'Ollama tourne et que Gemma 4 est disponible:
+Le bot utilise Ollama par defaut. Avant de lancer `python babouin_bot.py`, verifie qu'Ollama tourne et que Gemma 4 est disponible:
 
 ```powershell
 ollama list
@@ -91,9 +91,9 @@ Plus ces valeurs sont hautes, plus le bot a de contexte, mais plus la generation
 
 ## Style
 
-Le style est fourni par `lipa_style_system_prompt.txt`.
+Le style est fourni par `babouin_system_prompt.txt`.
 
-Au demarrage, `bot.py` lit ce fichier et l'ajoute au system prompt. C'est la bonne place pour decrire:
+Au demarrage, `babouin_bot.py` lit ce fichier et l'ajoute au system prompt. C'est la bonne place pour decrire:
 
 - le ton du bot;
 - les phrases a eviter;
@@ -101,11 +101,11 @@ Au demarrage, `bot.py` lit ce fichier et l'ajoute au system prompt. C'est la bon
 - la facon de repondre aux questions;
 - les limites a ne pas franchir.
 
-Le fichier `lipa_reponses_nettoyees.txt` peut rester comme archive/corpus source, mais il n'est pas envoye au modele a chaque message. Le fichier vraiment utilise en production est `lipa_style_system_prompt.txt`.
+Le fichier `lipa_reponses_nettoyees.txt` peut rester comme archive/corpus source, mais il n'est pas envoye au modele a chaque message. Le fichier vraiment utilise en production est `babouin_system_prompt.txt`.
 
 ## Fichiers principaux
 
-`bot.py` contient toute la logique du bot Discord principal: lecture du contexte, appel Ollama/OpenAI, decoupage des messages longs et remplacement des emojis custom Discord.
+`babouin_bot.py` contient toute la logique du bot Discord principal: lecture du contexte, appel Ollama/OpenAI, decoupage des messages longs et remplacement des emojis custom Discord.
 
 `summary_bot.py` contient le deuxieme bot. Il utilise son propre token Discord (`DISCORD_SUMMARY_TOKEN`) et les memes reglages LLM que le premier bot.
 
@@ -119,7 +119,7 @@ Le fichier `lipa_reponses_nettoyees.txt` peut rester comme archive/corpus source
 Copy-Item .env.gemma4 .env -Force
 ```
 
-`lipa_style_system_prompt.txt` est le guide de style charge a chaque reponse.
+`babouin_system_prompt.txt` est le guide de style charge a chaque reponse.
 
 `lipa_reponses_nettoyees.txt` est le corpus source nettoye. Il sert seulement de reference manuelle si tu veux reecrire le prompt de style.
 
@@ -175,4 +175,3 @@ OLLAMA_REPEAT_PENALTY=1.3
 ```
 
 Pour revenir a OpenAI plus tard, mets `LLM_PROVIDER=openai`, renseigne `OPENAI_API_KEY`, puis configure `OPENAI_MODEL`.
-# discord-bot
