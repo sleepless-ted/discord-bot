@@ -3,3 +3,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 
+# pixi environments
+.pixi/
+pixi.lock
+!.pixi/config.toml

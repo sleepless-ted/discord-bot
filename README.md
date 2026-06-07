@@ -43,11 +43,22 @@ Le projet contient maintenant deux bots independants:
    # Deuxieme bot de resume
    DISCORD_SUMMARY_TOKEN=ton_token_du_deuxieme_bot
    SUMMARY_COMMAND_PREFIX=!resume
-   SUMMARY_CONTEXT_MESSAGE_LIMIT=80
-   SUMMARY_MAX_HISTORY_LIMIT=200
+   SUMMARY_CONTEXT_MESSAGE_DEFAULT=80
+   SUMMARY_CONTEXT_MESSAGE_MAX=200
    SUMMARY_MAX_OUTPUT_TOKENS=900
    SUMMARY_INCLUDE_BOTS=true
    SUMMARY_SYSTEM_PROMPT_FILE=
+   SUMMARY_READ_AUDIO_ATTACHMENTS=true
+   SUMMARY_MAX_AUDIO_ATTACHMENTS=4
+   SUMMARY_MAX_AUDIO_BYTES=10000000
+   SUMMARY_FALLBACK_WITHOUT_AUDIO=true
+   SUMMARY_CONVERT_AUDIO_TO_WAV=true
+   SUMMARY_TRANSCRIBE_AUDIO_FIRST=true
+   SUMMARY_AUDIO_TRANSCRIPTION_TOKENS=500
+   SUMMARY_SILENT_MODE=false
+   SUMMARY_PRINT_AUDIO_TRANSCRIPTS=true
+   SUMMARY_PRINT_AUDIO_TRANSCRIPT_LIMIT=4000
+   FFMPEG_PATH=ffmpeg
    ```
 
 4. Dans le Discord Developer Portal, active l'intent **Message Content Intent** pour chaque bot.
@@ -109,6 +120,20 @@ Le fichier `lipa_reponses_nettoyees.txt` peut rester comme archive/corpus source
 
 `summary_bot.py` contient le deuxieme bot. Il utilise son propre token Discord (`DISCORD_SUMMARY_TOKEN`) et les memes reglages LLM que le premier bot.
 
+Pour que le bot de resume analyse les pieces jointes audio, utilise un modele compatible audio comme:
+
+```env
+OLLAMA_MODEL=gemma4:e4b
+```
+
+Les audios Discord sont telecharges puis envoyes a Ollama en base64. Les limites se reglent avec `SUMMARY_MAX_AUDIO_ATTACHMENTS` et `SUMMARY_MAX_AUDIO_BYTES`. Les vocaux Discord sont souvent en OGG/Opus; `SUMMARY_CONVERT_AUDIO_TO_WAV=true` les convertit en WAV avec `ffmpeg` avant envoi. `SUMMARY_TRANSCRIBE_AUDIO_FIRST=true` demande d'abord a Gemma de transcrire chaque audio, puis ajoute ces transcriptions au contexte du resume. `SUMMARY_PRINT_AUDIO_TRANSCRIPTS=true` affiche chaque transcription dans la console. `SUMMARY_SILENT_MODE=true` coupe les impressions de contenu texte comme les transcriptions et le prompt final. Si Ollama renvoie une erreur serveur sur l'audio, `SUMMARY_FALLBACK_WITHOUT_AUDIO=true` permet au bot de refaire un essai sans audio au lieu d'echouer completement.
+
+Si `ffmpeg` n'est pas installe, installe-le dans l'environnement conda:
+
+```powershell
+conda install -c conda-forge ffmpeg
+```
+
 `requirements.txt` liste les dependances runtime du bot.
 
 `.env` contient la configuration active.
@@ -166,6 +191,20 @@ Si le bot manque de contexte:
 CONTEXT_MESSAGE_LIMIT=80
 OLLAMA_NUM_CTX=32768
 ```
+
+Pour que le bot de resume lise aussi les images jointes:
+
+```env
+SUMMARY_READ_IMAGE_ATTACHMENTS=true
+SUMMARY_DESCRIBE_IMAGES_FIRST=true
+SUMMARY_MAX_IMAGE_ATTACHMENTS=6
+SUMMARY_MAX_IMAGE_BYTES=8000000
+SUMMARY_IMAGE_DESCRIPTION_TOKENS=350
+SUMMARY_PRINT_FINAL_PROMPT=true
+SUMMARY_SILENT_MODE=false
+```
+
+Avec `SUMMARY_DESCRIBE_IMAGES_FIRST=true`, chaque image est d'abord decrite separement, puis la description est replacee dans le message Discord correspondant avant le resume final. Le modele configure doit accepter les images. Avec Ollama, utilise un modele multimodal; avec OpenAI, utilise un modele compatible vision.
 
 Si le bot repete trop souvent les memes phrases:
 
