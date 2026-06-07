@@ -8,7 +8,7 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
-python = ">=3.14.5,<3.15"
+python = ">=3.14.5"
 
 [pypi-dependencies]
 aiohttp = ">=3.9.0"
