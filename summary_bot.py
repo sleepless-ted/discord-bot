@@ -8,14 +8,20 @@ import shutil
 import tempfile
 from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Any
 
 import aiohttp
 import discord
 from discord.errors import LoginFailure
 from dotenv import load_dotenv
 
+from llm_backend import LLMBackendError, chat_gemini, normalize_provider
+
 from babouin_bot import (
     DISCORD_REPLY_LIMIT,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    GEMINI_TIMEOUT,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
     OLLAMA_REPEAT_PENALTY,
@@ -32,7 +38,7 @@ from babouin_bot import (
     replace_custom_emoji_names,
     split_discord_message,
 )
-from llm_backend import normalize_provider
+from llm_backend import chat_gemini, normalize_provider
 
 
 load_dotenv(".env")
@@ -53,7 +59,7 @@ def clean_discord_token(value: str | None) -> str:
 
 
 DISCORD_SUMMARY_TOKEN = clean_discord_token(os.getenv("DISCORD_SUMMARY_TOKEN"))
-SUMMARY_COMMAND_PREFIX = os.getenv("SUMMARY_COMMAND_PREFIX", "!resume").strip()
+SUMMARY_COMMAND_PREFIX = os.getenv("SUMMARY_COMMAND_PREFIX", "!resumix").strip()
 SUMMARY_CONTEXT_MESSAGE_DEFAULT = int(
     os.getenv("SUMMARY_CONTEXT_MESSAGE_DEFAULT", os.getenv("SUMMARY_CONTEXT_MESSAGE_LIMIT", "80"))
 )
@@ -215,7 +221,7 @@ def require_env() -> None:
         missing.append("DISCORD_SUMMARY_TOKEN")
     if SUMMARY_LLM_PROVIDER == "openai" and not os.getenv("OPENAI_API_KEY"):
         missing.append("OPENAI_API_KEY")
-    if SUMMARY_LLM_PROVIDER not in {"ollama", "openai"}:
+    if SUMMARY_LLM_PROVIDER not in {"ollama", "openai", "gemini"}:
         missing.append("SUMMARY_LLM_PROVIDER=ollama ou openai")
 
     if missing:
@@ -848,9 +854,98 @@ async def ask_openai_summary(conversation: list[ConversationLine], request: str)
         await client.close()
 
 
+async def describe_image_attachment_gemini(attachment: ImageAttachment) -> str:
+    try:
+        response = await chat_gemini(
+            model=GEMINI_MODEL,
+            api_key=GEMINI_API_KEY,
+            messages=[{
+                "role": "user",
+                "content": (
+                    "Decris cette image. Mentionne le texte visible, les personnes/objets, "
+                    "l'action, le ton apparent, et ce qui peut expliquer la reaction des gens. "
+                    f"Image: data:{attachment.media_type};base64,{attachment.data_base64}"
+                )
+            }],
+            temperature=0.3,
+            max_tokens=SUMMARY_IMAGE_DESCRIPTION_TOKENS,
+            timeout=GEMINI_TIMEOUT,
+        )
+        return response.text.strip()
+    except LLMBackendError as exc:
+        # Handle quota errors gracefully
+        error_msg = str(exc)
+        if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
+            logging.warning("Gemini quota depassee pour description d'image %s", attachment.filename)
+            return "[image non decrite: quota API depassee]"
+        raise
+
+
+async def add_image_descriptions_gemini(conversation: list[ConversationLine]) -> list[ConversationLine]:
+    updated_conversation = []
+    for line in conversation:
+        descriptions = []
+        for attachment in line.image_attachments:
+            try:
+                description = await describe_image_attachment_gemini(attachment)
+            except Exception:
+                logging.exception("Description image impossible avec Gemini pour %s", attachment.filename)
+                continue
+
+            if not description:
+                description = "[image incomprehensible]"
+            logging.info("Image decrite par Gemini: %s", attachment.filename)
+            descriptions.append(f"[description image {attachment.filename}: {description}]")
+
+        if descriptions:
+            updated_conversation.append(replace(line, content=f"{line.content} {' '.join(descriptions)}"))
+        else:
+            updated_conversation.append(line)
+
+    return updated_conversation
+
+
+async def ask_gemini_summary(conversation: list[ConversationLine], request: str) -> str:
+    image_payloads = collect_image_attachments(conversation)
+    if image_payloads and SUMMARY_DESCRIBE_IMAGES_FIRST:
+        conversation = await add_image_descriptions_gemini(conversation)
+        image_payloads = []
+
+    summary_input = build_summary_input(conversation, request)
+    print_final_summary_prompt(summary_input)
+
+    messages: list[dict[str, Any]] = []
+    if image_payloads:
+        for attachment in image_payloads:
+            messages.append({
+                "role": "user",
+                "content": f"Image: data:{attachment.media_type};base64,{attachment.data_base64}\n{summary_input}"
+            })
+        logging.info("Envoi de %s image(s) a Gemini", len(image_payloads))
+    else:
+        messages.append({
+            "role": "user",
+            "content": summary_input
+        })
+
+    response = await chat_gemini(
+        model=GEMINI_MODEL,
+        api_key=GEMINI_API_KEY,
+        messages=[{"role": "system", "content": SUMMARY_SYSTEM_PROMPT}] + messages,
+        temperature=OLLAMA_TEMPERATURE,
+        max_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
+        timeout=GEMINI_TIMEOUT,
+    )
+    if not response.text:
+        logging.warning("Gemini a renvoye une reponse vide")
+    return response.text
+
+
 async def ask_summary_llm(conversation: list[ConversationLine], request: str) -> str:
     if SUMMARY_LLM_PROVIDER == "openai":
         return await ask_openai_summary(conversation, request)
+    if SUMMARY_LLM_PROVIDER == "gemini":
+        return await ask_gemini_summary(conversation, request)
 
     return await ask_ollama_summary(conversation, request)
 
@@ -935,6 +1030,8 @@ async def main() -> None:
             OLLAMA_NUM_CTX,
             SUMMARY_MAX_OUTPUT_TOKENS,
         )
+    elif SUMMARY_LLM_PROVIDER == "gemini":
+        logging.info("LLM Gemini pour resume: %s", GEMINI_MODEL)
     else:
         logging.info("LLM OpenAI pour resume: %s", OPENAI_MODEL)
 
