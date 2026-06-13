@@ -2,7 +2,7 @@
 authors = ["Ted <tdousset@gmail.com>"]
 channels = ["conda-forge"]
 name = "discordbot"
-platforms = ["win-64"]
+platforms = ["win-64", "linux-64"]
 version = "0.1.0"
 
 [tasks]
