@@ -5,16 +5,22 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-import aiohttp
 import discord
 from dotenv import load_dotenv
+
+from llm_backend import chat_gemini, chat_ollama, normalize_provider
 
 
 load_dotenv(".env")
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+LLM_PROVIDER = normalize_provider(
+    os.getenv("BABOUIN_LLM_PROVIDER", os.getenv("LLM_PROVIDER", "ollama"))
+)
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.2")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")#gemini-3.1-flash-lite
+GEMINI_TIMEOUT = float(os.getenv("GEMINI_TIMEOUT", "120"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:26b")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
@@ -89,8 +95,10 @@ def require_env() -> None:
         missing.append("DISCORD_TOKEN")
     if LLM_PROVIDER == "openai" and not os.getenv("OPENAI_API_KEY"):
         missing.append("OPENAI_API_KEY")
-    if LLM_PROVIDER not in {"ollama", "openai"}:
-        missing.append("LLM_PROVIDER=ollama ou LLM_PROVIDER=openai")
+    if LLM_PROVIDER == "gemini" and not GEMINI_API_KEY:
+        missing.append("GEMINI_API_KEY ou GOOGLE_API_KEY")
+    if LLM_PROVIDER not in {"ollama", "openai", "gemini"}:
+        missing.append("BABOUIN_LLM_PROVIDER=ollama, openai ou gemini")
 
     if missing:
         names = ", ".join(missing)
@@ -223,16 +231,15 @@ def recover_answer_from_thinking(thinking: str) -> str:
 
 
 async def ask_ollama(recent_messages: RecentMessages, current_prompt: str) -> str:
-    endpoint = f"{OLLAMA_URL.rstrip('/')}/api/chat"
-    payload = {
-        "model": OLLAMA_MODEL,
-        "stream": False,
-        "think": OLLAMA_THINK,
-        "messages": [
+    response = await chat_ollama(
+        model=OLLAMA_MODEL,
+        base_url=OLLAMA_URL,
+        think=OLLAMA_THINK,
+        messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_llm_input(recent_messages, current_prompt)},
         ],
-        "options": {
+        options={
             "num_ctx": OLLAMA_NUM_CTX,
             "num_predict": OLLAMA_NUM_PREDICT,
             "temperature": OLLAMA_TEMPERATURE,
@@ -241,21 +248,32 @@ async def ask_ollama(recent_messages: RecentMessages, current_prompt: str) -> st
             "repeat_penalty": OLLAMA_REPEAT_PENALTY,
             "repeat_last_n": 256,
         },
-    }
+    )
 
-    timeout = aiohttp.ClientTimeout(total=120)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(endpoint, json=payload) as response:
-            response.raise_for_status()
-            data = await response.json()
-
-    message = data.get("message", {})
-    content = message.get("content", "").strip()
+    content = response.text
     if not content:
+        message = response.raw.get("message", {})
         content = recover_answer_from_thinking(message.get("thinking", ""))
     if not content:
-        logging.warning("Ollama a renvoye une reponse vide: %s", data)
+        logging.warning("Ollama a renvoye une reponse vide: %s", response.raw)
     return content
+
+
+async def ask_gemini(recent_messages: RecentMessages, current_prompt: str) -> str:
+    response = await chat_gemini(
+        model=GEMINI_MODEL,
+        api_key=GEMINI_API_KEY,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": build_llm_input(recent_messages, current_prompt)},
+        ],
+        temperature=OLLAMA_TEMPERATURE,
+        max_tokens=OLLAMA_NUM_PREDICT,
+        timeout=GEMINI_TIMEOUT,
+    )
+    if not response.text:
+        logging.warning("Gemini a renvoye une reponse vide")
+    return response.text
 
 
 async def ask_openai(recent_messages: RecentMessages, current_prompt: str) -> str:
@@ -282,6 +300,8 @@ async def ask_openai(recent_messages: RecentMessages, current_prompt: str) -> st
 async def ask_llm(recent_messages: RecentMessages, current_prompt: str) -> str:
     if LLM_PROVIDER == "openai":
         return await ask_openai(recent_messages, current_prompt)
+    if LLM_PROVIDER == "gemini":
+        return await ask_gemini(recent_messages, current_prompt)
 
     return await ask_ollama(recent_messages, current_prompt)
 
@@ -381,8 +401,10 @@ async def main() -> None:
             OLLAMA_TEMPERATURE,
             OLLAMA_REPEAT_PENALTY,
         )
-    else:
+    elif LLM_PROVIDER == "openai":
         logging.info("LLM OpenAI: %s", OPENAI_MODEL)
+    else:
+        logging.info("LLM Gemini via google-genai: %s", GEMINI_MODEL)
 
     bot = create_bot()
     await bot.start(DISCORD_TOKEN)

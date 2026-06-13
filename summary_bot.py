@@ -16,7 +16,6 @@ from dotenv import load_dotenv
 
 from babouin_bot import (
     DISCORD_REPLY_LIMIT,
-    LLM_PROVIDER,
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
     OLLAMA_REPEAT_PENALTY,
@@ -33,9 +32,14 @@ from babouin_bot import (
     replace_custom_emoji_names,
     split_discord_message,
 )
+from llm_backend import normalize_provider
 
 
 load_dotenv(".env")
+
+SUMMARY_LLM_PROVIDER = normalize_provider(
+    os.getenv("SUMMARY_LLM_PROVIDER", os.getenv("LLM_PROVIDER", "ollama"))
+)
 
 
 def clean_discord_token(value: str | None) -> str:
@@ -209,10 +213,10 @@ def require_env() -> None:
     missing = []
     if not DISCORD_SUMMARY_TOKEN:
         missing.append("DISCORD_SUMMARY_TOKEN")
-    if LLM_PROVIDER == "openai" and not os.getenv("OPENAI_API_KEY"):
+    if SUMMARY_LLM_PROVIDER == "openai" and not os.getenv("OPENAI_API_KEY"):
         missing.append("OPENAI_API_KEY")
-    if LLM_PROVIDER not in {"ollama", "openai"}:
-        missing.append("LLM_PROVIDER=ollama ou LLM_PROVIDER=openai")
+    if SUMMARY_LLM_PROVIDER not in {"ollama", "openai"}:
+        missing.append("SUMMARY_LLM_PROVIDER=ollama ou openai")
 
     if missing:
         names = ", ".join(missing)
@@ -845,7 +849,7 @@ async def ask_openai_summary(conversation: list[ConversationLine], request: str)
 
 
 async def ask_summary_llm(conversation: list[ConversationLine], request: str) -> str:
-    if LLM_PROVIDER == "openai":
+    if SUMMARY_LLM_PROVIDER == "openai":
         return await ask_openai_summary(conversation, request)
 
     return await ask_ollama_summary(conversation, request)
@@ -923,7 +927,7 @@ async def main() -> None:
     )
     if SUMMARY_SYSTEM_PROMPT_FILE and read_optional_text_file(SUMMARY_SYSTEM_PROMPT_FILE):
         logging.info("Prompt supplementaire resume charge depuis %s", SUMMARY_SYSTEM_PROMPT_FILE)
-    if LLM_PROVIDER == "ollama":
+    if SUMMARY_LLM_PROVIDER == "ollama":
         logging.info(
             "LLM local Ollama pour resume: %s (%s, num_ctx=%s, sortie=%s tokens)",
             OLLAMA_MODEL,

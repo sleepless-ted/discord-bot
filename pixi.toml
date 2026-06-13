@@ -13,6 +13,7 @@ python = ">=3.14.5"
 [pypi-dependencies]
 aiohttp = ">=3.9.0"
 discord-py = ">=2.4.0"
+google-genai = ">=2.8.0,<3"
 imageio-ffmpeg = ">=0.6.0"
 openai = ">=1.68.0"
 python-dotenv = ">=1.0.1"

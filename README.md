@@ -27,6 +27,9 @@ Le projet contient maintenant deux bots independants:
    ```env
    DISCORD_TOKEN=ton_token_discord
    LLM_PROVIDER=ollama
+   # Surcharges facultatives si les deux bots utilisent des providers differents
+   BABOUIN_LLM_PROVIDER=ollama
+   SUMMARY_LLM_PROVIDER=ollama
    OLLAMA_URL=http://localhost:11434
    OLLAMA_MODEL=gemma4:26b
    OLLAMA_NUM_CTX=32768
@@ -114,9 +117,30 @@ Au demarrage, `babouin_bot.py` lit ce fichier et l'ajoute au system prompt. C'es
 
 Le fichier `lipa_reponses_nettoyees.txt` peut rester comme archive/corpus source, mais il n'est pas envoye au modele a chaque message. Le fichier vraiment utilise en production est `babouin_system_prompt.txt`.
 
+## Gemini avec google-genai
+
+Le bot Babouin peut utiliser le backend Gemini issu de `llm-slave` via le SDK officiel `google-genai`:
+
+```powershell
+pixi install
+```
+
+```env
+BABOUIN_LLM_PROVIDER=gemini
+GEMINI_API_KEY=ta_cle_google_ai_studio
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT=120
+```
+
+Les alias `genai`, `google` et `google-genai` sont aussi acceptes. Le contenu de
+`babouin_system_prompt.txt` est transmis comme `system_instruction` natif de Gemini.
+Le bot de resume reste sur le provider defini par `SUMMARY_LLM_PROVIDER`.
+
 ## Fichiers principaux
 
 `babouin_bot.py` contient toute la logique du bot Discord principal: lecture du contexte, appel Ollama/OpenAI, decoupage des messages longs et remplacement des emojis custom Discord.
+
+`llm_backend.py` contient les backends texte asynchrones communs pour Ollama et Gemini.
 
 `summary_bot.py` contient le deuxieme bot. Il utilise son propre token Discord (`DISCORD_SUMMARY_TOKEN`) et les memes reglages LLM que le premier bot.
 
@@ -213,4 +237,4 @@ OLLAMA_TEMPERATURE=1
 OLLAMA_REPEAT_PENALTY=1.3
 ```
 
-Pour revenir a OpenAI plus tard, mets `LLM_PROVIDER=openai`, renseigne `OPENAI_API_KEY`, puis configure `OPENAI_MODEL`.
+Pour revenir a OpenAI plus tard, mets `BABOUIN_LLM_PROVIDER=openai`, renseigne `OPENAI_API_KEY`, puis configure `OPENAI_MODEL`.
