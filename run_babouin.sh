@@ -1,0 +1,1 @@
+nohup pixi run python babouin_bot.py > babouin.log 2>&1 &

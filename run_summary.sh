@@ -1,0 +1,1 @@
+nohup pixi run python summary_bot.py > summary.log 2>&1 &
