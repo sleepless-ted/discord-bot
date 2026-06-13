@@ -25,14 +25,12 @@ from babouin_bot import (
     OLLAMA_MODEL,
     OLLAMA_NUM_CTX,
     OLLAMA_REPEAT_PENALTY,
-    OLLAMA_TEMPERATURE,
     OLLAMA_THINK,
     OLLAMA_TOP_K,
     OLLAMA_TOP_P,
     OLLAMA_URL,
     OPENAI_MODEL,
-    PROMPT_CACHE_KEY,
-    PROMPT_CACHE_RETENTION,
+    TEMPERATURE,
     read_optional_text_file,
     recover_answer_from_thinking,
     replace_custom_emoji_names,
@@ -558,7 +556,7 @@ def build_ollama_summary_payload(
         "options": {
             "num_ctx": OLLAMA_NUM_CTX,
             "num_predict": SUMMARY_MAX_OUTPUT_TOKENS,
-            "temperature": min(OLLAMA_TEMPERATURE, 0.4),
+            "temperature": min(TEMPERATURE, 0.4),
             "top_p": OLLAMA_TOP_P,
             "top_k": OLLAMA_TOP_K,
             "repeat_penalty": OLLAMA_REPEAT_PENALTY,
@@ -813,12 +811,6 @@ async def ask_ollama_summary(conversation: list[ConversationLine], request: str)
 async def ask_openai_summary(conversation: list[ConversationLine], request: str) -> str:
     from openai import AsyncOpenAI
 
-    extra_body = {}
-    if PROMPT_CACHE_KEY:
-        extra_body["prompt_cache_key"] = f"{PROMPT_CACHE_KEY}-summary"
-    if PROMPT_CACHE_RETENTION:
-        extra_body["prompt_cache_retention"] = PROMPT_CACHE_RETENTION
-
     client = AsyncOpenAI()
     try:
         image_payloads = collect_image_attachments(conversation)
@@ -847,7 +839,6 @@ async def ask_openai_summary(conversation: list[ConversationLine], request: str)
             instructions=SUMMARY_SYSTEM_PROMPT,
             input=input_payload,
             max_output_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
-            extra_body=extra_body or None,
         )
         return response.output_text.strip()
     finally:
@@ -932,7 +923,7 @@ async def ask_gemini_summary(conversation: list[ConversationLine], request: str)
         model=GEMINI_MODEL,
         api_key=GEMINI_API_KEY,
         messages=[{"role": "system", "content": SUMMARY_SYSTEM_PROMPT}] + messages,
-        temperature=OLLAMA_TEMPERATURE,
+        temperature=TEMPERATURE,
         max_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
         timeout=GEMINI_TIMEOUT,
     )

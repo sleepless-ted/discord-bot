@@ -24,17 +24,15 @@ GEMINI_TIMEOUT = float(os.getenv("GEMINI_TIMEOUT", "120"))
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:26b")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
-OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "700"))
+NUM_PREDICT = int(os.getenv("NUM_PREDICT", "700"))
 OLLAMA_THINK = os.getenv("OLLAMA_THINK", "false").lower() in {"1", "true", "yes", "on"}
-OLLAMA_TEMPERATURE = float(os.getenv("OLLAMA_TEMPERATURE", "0.95"))
+TEMPERATURE = float(os.getenv("TEMPERATURE", "0.95"))
 OLLAMA_TOP_P = float(os.getenv("OLLAMA_TOP_P", "0.9"))
 OLLAMA_TOP_K = int(os.getenv("OLLAMA_TOP_K", "80"))
 OLLAMA_REPEAT_PENALTY = float(os.getenv("OLLAMA_REPEAT_PENALTY", "1.18"))
 CONTEXT_MESSAGE_LIMIT = int(os.getenv("CONTEXT_MESSAGE_LIMIT", "10"))
 DISCORD_REPLY_LIMIT = 1900
 STYLE_PROMPT_FILE = os.getenv("STYLE_PROMPT_FILE", "lipa_style_system_prompt.txt")
-PROMPT_CACHE_KEY = os.getenv("PROMPT_CACHE_KEY", "discord-lipa-style-v1")
-PROMPT_CACHE_RETENTION = os.getenv("PROMPT_CACHE_RETENTION", "24h")
 CUSTOM_EMOJI_RE = re.compile(r"(?<!<):([A-Za-z0-9_~]+):(?!\d*>|//)")
 
 BASE_SYSTEM_PROMPT = """Tu es un assistant Discord utile, naturel et concis.
@@ -241,8 +239,8 @@ async def ask_ollama(recent_messages: RecentMessages, current_prompt: str) -> st
         ],
         options={
             "num_ctx": OLLAMA_NUM_CTX,
-            "num_predict": OLLAMA_NUM_PREDICT,
-            "temperature": OLLAMA_TEMPERATURE,
+            "num_predict": NUM_PREDICT,
+            "temperature": TEMPERATURE,
             "top_p": OLLAMA_TOP_P,
             "top_k": OLLAMA_TOP_K,
             "repeat_penalty": OLLAMA_REPEAT_PENALTY,
@@ -267,8 +265,8 @@ async def ask_gemini(recent_messages: RecentMessages, current_prompt: str) -> st
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": build_llm_input(recent_messages, current_prompt)},
         ],
-        temperature=OLLAMA_TEMPERATURE,
-        max_tokens=OLLAMA_NUM_PREDICT,
+        temperature=TEMPERATURE,
+        max_tokens=NUM_PREDICT,
         timeout=GEMINI_TIMEOUT,
     )
     if not response.text:
@@ -279,19 +277,12 @@ async def ask_gemini(recent_messages: RecentMessages, current_prompt: str) -> st
 async def ask_openai(recent_messages: RecentMessages, current_prompt: str) -> str:
     from openai import AsyncOpenAI
 
-    extra_body = {}
-    if PROMPT_CACHE_KEY:
-        extra_body["prompt_cache_key"] = PROMPT_CACHE_KEY
-    if PROMPT_CACHE_RETENTION:
-        extra_body["prompt_cache_retention"] = PROMPT_CACHE_RETENTION
-
     client = AsyncOpenAI()
     response = await client.responses.create(
         model=OPENAI_MODEL,
         instructions=SYSTEM_PROMPT,
         input=build_llm_input(recent_messages, current_prompt),
         max_output_tokens=700,
-        extra_body=extra_body or None,
     )
     await client.close()
     return response.output_text.strip()
@@ -398,7 +389,7 @@ async def main() -> None:
             OLLAMA_URL,
             OLLAMA_NUM_CTX,
             OLLAMA_THINK,
-            OLLAMA_TEMPERATURE,
+            TEMPERATURE,
             OLLAMA_REPEAT_PENALTY,
         )
     elif LLM_PROVIDER == "openai":

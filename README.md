@@ -33,9 +33,9 @@ Le projet contient maintenant deux bots independants:
    OLLAMA_URL=http://localhost:11434
    OLLAMA_MODEL=gemma4:26b
    OLLAMA_NUM_CTX=32768
-   OLLAMA_NUM_PREDICT=220
+   NUM_PREDICT=220
    OLLAMA_THINK=false
-   OLLAMA_TEMPERATURE=0.95
+   TEMPERATURE=0.95
    OLLAMA_TOP_P=0.9
    OLLAMA_TOP_K=80
    OLLAMA_REPEAT_PENALTY=1.25
@@ -99,7 +99,8 @@ Si ton modele n'a pas exactement le nom `gemma4:26b`, mets le nom affiche par `o
 OLLAMA_MODEL=nom_du_modele
 ```
 
-`OLLAMA_NUM_CTX` controle la taille du contexte cote modele. `CONTEXT_MESSAGE_LIMIT` controle combien de messages Discord le bot lit avant de repondre.
+`NUM_PREDICT` et `TEMPERATURE` s'appliquent a Ollama comme a Gemini.
+`OLLAMA_NUM_CTX` controle la taille du contexte cote Ollama. `CONTEXT_MESSAGE_LIMIT` controle combien de messages Discord le bot lit avant de repondre.
 
 Plus ces valeurs sont hautes, plus le bot a de contexte, mais plus la generation est lente et gourmande en RAM/VRAM.
 
@@ -206,7 +207,7 @@ Pour eviter de melanger les deux bots, cree une deuxieme application dans le Dis
 Si le bot repond trop long:
 
 ```env
-OLLAMA_NUM_PREDICT=120
+NUM_PREDICT=120
 ```
 
 Si le bot manque de contexte:
@@ -233,7 +234,7 @@ Avec `SUMMARY_DESCRIBE_IMAGES_FIRST=true`, chaque image est d'abord decrite sepa
 Si le bot repete trop souvent les memes phrases:
 
 ```env
-OLLAMA_TEMPERATURE=1
+TEMPERATURE=1
 OLLAMA_REPEAT_PENALTY=1.3
 ```
 
