@@ -8,3 +8,4 @@ __pycache__/
 pixi.lock
 !.pixi/config.toml
 /data
+*.log
