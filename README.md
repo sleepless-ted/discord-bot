@@ -131,6 +131,8 @@ BABOUIN_LLM_PROVIDER=gemini
 GEMINI_API_KEY=ta_cle_google_ai_studio
 GEMINI_MODEL=gemini-2.5-flash
 GEMINI_TIMEOUT=120
+# Nombre maximal de tentatives pour les erreurs Gemini temporaires (quota, timeout, 5xx)
+SUMMARY_GEMINI_MAX_ATTEMPTS=3
 ```
 
 Les alias `genai`, `google` et `google-genai` sont aussi acceptes. Le contenu de

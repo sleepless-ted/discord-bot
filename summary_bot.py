@@ -36,9 +36,6 @@ from babouin_bot import (
     replace_custom_emoji_names,
     split_discord_message,
 )
-from llm_backend import chat_gemini, normalize_provider
-
-
 load_dotenv(".env")
 
 SUMMARY_LLM_PROVIDER = normalize_provider(
@@ -65,6 +62,7 @@ SUMMARY_CONTEXT_MESSAGE_MAX = int(
     os.getenv("SUMMARY_CONTEXT_MESSAGE_MAX", os.getenv("SUMMARY_MAX_HISTORY_LIMIT", "200"))
 )
 SUMMARY_MAX_OUTPUT_TOKENS = int(os.getenv("SUMMARY_MAX_OUTPUT_TOKENS", "900"))
+SUMMARY_GEMINI_MAX_ATTEMPTS = int(os.getenv("SUMMARY_GEMINI_MAX_ATTEMPTS", "3"))
 SUMMARY_INCLUDE_BOTS = os.getenv("SUMMARY_INCLUDE_BOTS", "true").strip().lower() in {"1", "true", "yes", "on"}
 SUMMARY_SYSTEM_PROMPT_FILE = os.getenv("SUMMARY_SYSTEM_PROMPT_FILE", "")
 SUMMARY_READ_AUDIO_ATTACHMENTS = os.getenv("SUMMARY_READ_AUDIO_ATTACHMENTS", "true").strip().lower() in {
@@ -219,8 +217,10 @@ def require_env() -> None:
         missing.append("DISCORD_SUMMARY_TOKEN")
     if SUMMARY_LLM_PROVIDER == "openai" and not os.getenv("OPENAI_API_KEY"):
         missing.append("OPENAI_API_KEY")
+    if SUMMARY_LLM_PROVIDER == "gemini" and not GEMINI_API_KEY:
+        missing.append("GEMINI_API_KEY ou GOOGLE_API_KEY")
     if SUMMARY_LLM_PROVIDER not in {"ollama", "openai", "gemini"}:
-        missing.append("SUMMARY_LLM_PROVIDER=ollama ou openai")
+        missing.append("SUMMARY_LLM_PROVIDER=ollama, openai ou gemini")
 
     if missing:
         names = ", ".join(missing)
@@ -861,6 +861,7 @@ async def describe_image_attachment_gemini(attachment: ImageAttachment) -> str:
             temperature=0.3,
             max_tokens=SUMMARY_IMAGE_DESCRIPTION_TOKENS,
             timeout=GEMINI_TIMEOUT,
+            max_attempts=SUMMARY_GEMINI_MAX_ATTEMPTS,
         )
         return response.text.strip()
     except LLMBackendError as exc:
@@ -926,6 +927,7 @@ async def ask_gemini_summary(conversation: list[ConversationLine], request: str)
         temperature=TEMPERATURE,
         max_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
         timeout=GEMINI_TIMEOUT,
+        max_attempts=SUMMARY_GEMINI_MAX_ATTEMPTS,
     )
     if not response.text:
         logging.warning("Gemini a renvoye une reponse vide")
@@ -985,21 +987,24 @@ def create_summary_bot() -> discord.Client:
         request = clean_summary_request(message)
         history_limit = requested_message_limit(request)
 
-        async with message.channel.typing():
-            try:
+        try:
+            async with message.channel.typing():
                 conversation = await get_conversation_messages(message, bot.user, history_limit)
                 answer = await ask_summary_llm(conversation, request)
                 if not answer:
                     answer = "Je n'ai pas reussi a produire un resume pour le moment."
-            except Exception:
-                logging.exception("Erreur pendant la generation du resume")
+
+            await send_summary(message, answer)
+        except Exception:
+            # A Discord send failure must not escape the event handler either.
+            logging.exception("Erreur pendant la generation ou l'envoi du resume")
+            try:
                 await message.reply(
                     "Je n'arrive pas a generer le resume pour le moment. Regarde les logs du bot pour le detail.",
                     mention_author=False,
                 )
-                return
-
-        await send_summary(message, answer)
+            except Exception:
+                logging.exception("Impossible d'envoyer le message d'erreur du resume")
 
     return bot
 

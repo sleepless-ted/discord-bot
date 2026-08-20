@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from dataclasses import dataclass
 from typing import Any
 from urllib import parse
@@ -32,6 +33,31 @@ def normalize_provider(provider: str) -> str:
         "ollama-local": "ollama",
     }
     return aliases.get(normalized, normalized)
+
+
+def is_retryable_gemini_error(error: BaseException) -> bool:
+    """Return whether a Gemini failure is likely transient.
+
+    Authentication, invalid request and safety errors are deliberately not retried:
+    retrying them only delays the Discord response.
+    """
+    details = str(error).upper()
+    transient_markers = (
+        "RESOURCE_EXHAUSTED",
+        "UNAVAILABLE",
+        "DEADLINE_EXCEEDED",
+        "INTERNAL",
+        "TOO MANY REQUESTS",
+        "TIMEOUT",
+        "TIMED OUT",
+        "CONNECTION",
+        " HTTP 429",
+        " HTTP 500",
+        " HTTP 502",
+        " HTTP 503",
+        " HTTP 504",
+    )
+    return any(marker in details for marker in transient_markers)
 
 
 def normalize_messages(messages: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -199,6 +225,7 @@ async def chat_gemini(
     temperature: float,
     max_tokens: int | None,
     timeout: float = 120.0,
+    max_attempts: int = 3,
 ) -> LLMBackendResponse:
     if not model.strip():
         raise ValueError("Gemini model must not be empty")
@@ -206,13 +233,32 @@ async def chat_gemini(
         raise ValueError("Gemini api_key must not be empty")
     if timeout <= 0:
         raise ValueError("timeout must be greater than zero")
+    if max_attempts <= 0:
+        raise ValueError("max_attempts must be greater than zero")
 
-    return await asyncio.to_thread(
-        _chat_gemini_sync,
-        model=model,
-        api_key=api_key,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        timeout=timeout,
-    )
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return await asyncio.to_thread(
+                _chat_gemini_sync,
+                model=model,
+                api_key=api_key,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout=timeout,
+            )
+        except LLMBackendError as exc:
+            if attempt == max_attempts or not is_retryable_gemini_error(exc):
+                raise
+
+            delay = min(2 ** (attempt - 1), 4)
+            logging.warning(
+                "Gemini indisponible temporairement (tentative %s/%s): %s. Nouvelle tentative dans %ss.",
+                attempt,
+                max_attempts,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+    raise AssertionError("unreachable")

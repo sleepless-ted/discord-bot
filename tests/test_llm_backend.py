@@ -5,6 +5,7 @@ from unittest.mock import Mock, patch
 from llm_backend import (
     _chat_gemini_sync,
     build_ollama_payload,
+    is_retryable_gemini_error,
     normalize_messages,
     normalize_provider,
     to_gemini_input,
@@ -81,6 +82,11 @@ class LLMBackendTests(unittest.TestCase):
     def test_messages_reject_unknown_roles(self) -> None:
         with self.assertRaisesRegex(ValueError, "unsupported message role"):
             normalize_messages([{"role": "developer", "content": "test"}])
+
+    def test_gemini_retry_classification_avoids_invalid_requests(self) -> None:
+        self.assertTrue(is_retryable_gemini_error(RuntimeError("HTTP 503 UNAVAILABLE")))
+        self.assertTrue(is_retryable_gemini_error(RuntimeError("RESOURCE_EXHAUSTED")))
+        self.assertFalse(is_retryable_gemini_error(RuntimeError("HTTP 400 INVALID_ARGUMENT")))
 
 
 if __name__ == "__main__":
