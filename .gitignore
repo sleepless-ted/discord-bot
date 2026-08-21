@@ -1,8 +1,7 @@
-.env
 __pycache__/
 *.py[cod]
 .pytest_cache/
-
+.env
 # pixi environments
 .pixi/
 pixi.lock

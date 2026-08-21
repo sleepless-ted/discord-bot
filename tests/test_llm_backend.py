@@ -88,6 +88,11 @@ class LLMBackendTests(unittest.TestCase):
         self.assertTrue(is_retryable_gemini_error(RuntimeError("RESOURCE_EXHAUSTED")))
         self.assertFalse(is_retryable_gemini_error(RuntimeError("HTTP 400 INVALID_ARGUMENT")))
 
+    def test_gemini_retry_classification_uses_sdk_status_code(self) -> None:
+        error = RuntimeError("provider error")
+        error.code = 503
+        self.assertTrue(is_retryable_gemini_error(error))
+
 
 if __name__ == "__main__":
     unittest.main()

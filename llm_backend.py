@@ -35,13 +35,44 @@ def normalize_provider(provider: str) -> str:
     return aliases.get(normalized, normalized)
 
 
+def _gemini_error_status(error: BaseException) -> int | None:
+    """Extract an HTTP status code from a Gemini SDK exception, if available."""
+    for candidate in (error, getattr(error, "__cause__", None)):
+        if candidate is None:
+            continue
+        for attribute in ("code", "status_code"):
+            value = getattr(candidate, attribute, None)
+            if isinstance(value, int):
+                return value
+        response = getattr(candidate, "response", None)
+        value = getattr(response, "status_code", None)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def _format_gemini_error(error: BaseException) -> str:
+    """Keep useful provider diagnostics without relying on a full traceback."""
+    status = _gemini_error_status(error)
+    status_text = f" HTTP {status}" if status is not None else ""
+    return f"{type(error).__name__}{status_text}: {error}"
+
+
 def is_retryable_gemini_error(error: BaseException) -> bool:
     """Return whether a Gemini failure is likely transient.
 
     Authentication, invalid request and safety errors are deliberately not retried:
     retrying them only delays the Discord response.
     """
-    details = str(error).upper()
+    status = _gemini_error_status(error)
+    if status in {408, 429, 500, 502, 503, 504}:
+        return True
+
+    details = " ".join(
+        str(candidate)
+        for candidate in (error, getattr(error, "__cause__", None))
+        if candidate is not None
+    ).upper()
     transient_markers = (
         "RESOURCE_EXHAUSTED",
         "UNAVAILABLE",
@@ -210,7 +241,9 @@ def _chat_gemini_sync(
         text = str(getattr(response, "text", "") or "").strip()
         return LLMBackendResponse(text=text, raw=response)
     except Exception as exc:
-        raise LLMBackendError(f"Gemini generate_content request failed: {exc}") from exc
+        raise LLMBackendError(
+            f"Gemini generate_content request failed ({_format_gemini_error(exc)})"
+        ) from exc
     finally:
         close = getattr(client, "close", None)
         if callable(close):

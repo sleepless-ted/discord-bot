@@ -995,6 +995,18 @@ def create_summary_bot() -> discord.Client:
                     answer = "Je n'ai pas reussi a produire un resume pour le moment."
 
             await send_summary(message, answer)
+        except LLMBackendError as exc:
+            # Gemini/Ollama failures are expected operational errors.  They are
+            # already logged with their HTTP status by the backend, so a stack
+            # trace here would only make the service logs look like a crash.
+            logging.warning("Generation du resume indisponible: %s", exc)
+            try:
+                await message.reply(
+                    "Le service de resume est momentanement indisponible. Reessaie dans quelques instants.",
+                    mention_author=False,
+                )
+            except Exception:
+                logging.exception("Impossible d'envoyer le message d'erreur du resume")
         except Exception:
             # A Discord send failure must not escape the event handler either.
             logging.exception("Erreur pendant la generation ou l'envoi du resume")
